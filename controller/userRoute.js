@@ -18,6 +18,7 @@ const router = express.Router()
     } else {
       const user = rows[0];
       const isMatch = await bcrypt.compare(password, user.password);
+      if (!isMatch) return res.status(401).json(Result.error('密码错误'));
       if (isMatch) {
         const token = jwt.sign({ user_id: user.user_id, user_name: user.user_name }, process.env.JWT_SECRET, { expiresIn: '12h' });
         const login_user = {
@@ -28,7 +29,7 @@ const router = express.Router()
           email: user.email,
           info: user.info
         }
-        console.log(`登录成功,用户ID：${user.user_id}, token: ${token}, `,dayjs().format('YYYY-MM-DD HH:mm:ss') );
+        console.log(`登录成功,用户ID：${user.user_id}, token: ${token}, `, dayjs().format('YYYY-MM-DD HH:mm:ss'));
         res.json(Result.success('登录成功', { login_user, token }));
       }
     }
@@ -65,7 +66,7 @@ const router = express.Router()
       }
     }
   })
-  .post('/logout',jwtAuth, async (req, res) => {
+  .post('/logout', jwtAuth, async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
@@ -103,10 +104,6 @@ const router = express.Router()
     }
   })
   .post('/follow', jwtAuth, async (req, res) => {
-    const token = req.headers.authorization?.split(' ')[1];
-    const inBlacklist = await client.exists(`bl_${token}`);
-    if (inBlacklist) return res.status(401).json(Result.error('登录已过期'));
-    
     const { user_id, follower_id } = req.body;
     const sql = 'SELECT * FROM follow WHERE user_id =? AND follower_id =?';
     const [rows] = await pool.execute(sql, [user_id, follower_id]);
@@ -123,4 +120,132 @@ const router = express.Router()
       }
     }
   })
+  .post('/unfollow', jwtAuth, async (req, res) => {
+    const { user_id, follower_id } = req.body;
+    const sql = 'UPDATE follow SET deleted=1 WHERE user_id =? AND follower_id =?';
+    const [result] = await pool.execute(sql, [user_id, follower_id]);
+    if (result.affectedRows > 0) {
+      console.log(`取消关注成功，用户ID：${user_id}, 关注者ID：${follower_id}`, dayjs().format('YYYY-MM-DD HH:mm:ss'));
+      res.json(Result.success('取消关注成功'));
+    } else {
+      res.json(Result.error('取消关注失败'));
+    }
+  })
+  .post('/follow/isFollowed', jwtAuth, async (req, res) => {
+    const { user_id, object_id } = req.body;
+    const sql = 'SELECT * FROM follow WHERE user_id =? AND follower_id =?';
+    const [rows] = await pool.execute(sql, [object_id, user_id]);
+    if (rows.length > 0) {
+      res.json(Result.success('已关注', true));
+    } else {
+      res.json(Result.success('未关注', false));
+    }
+  })
+  .post('/follower/isFollower', jwtAuth, async (req, res) => {
+    const { user_id, object_id } = req.body;
+    const sql = 'SELECT * FROM follow WHERE user_id =? AND follower_id =?';
+    const [rows] = await pool.execute(sql, [user_id, object_id]);
+    if (rows.length > 0) {
+      res.json(Result.success('是粉丝', true));
+    } else {
+      res.json(Result.success('不是粉丝', false));
+    }
+  })
+  .post('/followed', jwtAuth, async (req, res) => {
+    const { user_id, pageNum, pageSize } = req.body;
+    const offset = (pageNum - 1) * pageSize;
+    const sql = 'SELECT user_id,user_name,nick_name,avatar,info FROM user WHERE user_id IN (SELECT user_id FROM follow WHERE follower_id =? and deleted=0) LIMIT?,?';
+    const [rows] = await pool.execute(sql, [user_id, offset.toString(), pageSize.toString()]);
+    if (rows.length > 0) {
+      console.log(`获取关注列表成功，共${rows.length}条记录`, dayjs().format('YYYY-MM-DD HH:mm:ss'));
+      res.json(Result.success('获取关注列表成功', rows));
+    } else {
+      res.json(Result.error('关注列表为空'));
+    }
+  })
+  .post('/follower', jwtAuth, async (req, res) => {
+    const { user_id, pageNum, pageSize } = req.body;
+    const offset = (pageNum - 1) * pageSize;
+    const sql = 'SELECT user_id,user_name,nick_name,avatar,info FROM user WHERE user_id IN (SELECT follower_id FROM follow WHERE user_id =? and deleted=0) LIMIT?,?';
+    const [rows] = await pool.execute(sql, [user_id, offset.toString(), pageSize.toString()]);
+    if (rows.length > 0) {
+      console.log(`获取粉丝列表成功，共${rows.length}条记录`, dayjs().format('YYYY-MM-DD HH:mm:ss'));
+      res.json(Result.success('获取粉丝列表成功', rows));
+    } else {
+      res.json(Result.error('粉丝列表为空'));
+    }
+  })
+  .post('/favoriteNotebooks', jwtAuth, async (req, res) => {
+    const { user_id, pageNum, pageSize } = req.body;
+    const offset = (pageNum - 1) * pageSize;
+    const sql = 'SELECT book.*, user.user_name, user.avatar FROM book INNER JOIN user ON book.user_id = user.user_id FROM mark WHERE user_id =? and deleted=0 and type=0 and book.deleted=0 and book.is_public=1 ORDER BY mark.create_time DESC LIMIT?,?';
+    const [rows] = await pool.execute(sql, [user_id, offset.toString(), pageSize.toString()]);
+    if (rows.length > 0) {
+      console.log(`获取收藏笔记本列表成功，共${rows.length}条记录`, dayjs().format('YYYY-MM-DD HH:mm:ss'));
+      res.json(Result.success('获取收藏笔记本列表成功', rows));
+    } else {
+      res.json(Result.error('收藏笔记本列表为空'));
+    }
+  })
+  .post('/favoriteNotes', jwtAuth, async (req, res) => {
+    const { user_id, pageNum, pageSize } = req.body;
+    const offset = (pageNum - 1) * pageSize;
+    const sql = 'SELECT note.*, user.user_name, user.avatar FROM note INNER JOIN user ON note.user_id = user.user_id FROM mark WHERE user_id =? and deleted=0 and type=1 and book.is_public=1 and book.deleted=0 ORDER BY mark.create_time DESC LIMIT ?, ?';
+    const [rows] = await pool.execute(sql, [user_id, offset.toString(), pageSize.toString()]);
+    if (rows.length > 0) {
+      console.log(`获取收藏笔记列表成功，共${rows.length}条记录`, dayjs().format('YYYY-MM-DD HH:mm:ss'));
+      res.json(Result.success('获取收藏笔记列表成功', rows));
+    } else {
+      res.json(Result.error('收藏笔记列表为空'));
+    }
+  })
+  .post('/heat', jwtAuth, async (req, res) => {
+    try {
+      const { user_id } = req.body;
+      const sql = `
+        SELECT 
+          date,
+          SUM(count) AS count,
+          CASE
+            WHEN SUM(count) = 0 THEN 0
+            WHEN SUM(count) BETWEEN 1 AND 10 THEN 1
+            WHEN SUM(count) BETWEEN 11 AND 20 THEN 2
+            WHEN SUM(count) BETWEEN 21 AND 30 THEN 3
+            WHEN SUM(count) BETWEEN 31 AND 40 THEN 4
+            ELSE 5
+          END AS level
+        FROM (
+          (SELECT DATE_FORMAT(created_at, '%Y-%m-%d') AS date, COUNT(*) AS count FROM book WHERE user_id=? AND deleted=0 GROUP BY date)
+          UNION ALL
+          (SELECT DATE_FORMAT(created_at, '%Y-%m-%d') AS date, COUNT(*) AS count FROM note WHERE user_id=? AND deleted=0 GROUP BY date)
+          UNION ALL
+          (SELECT DATE_FORMAT(created_at, '%Y-%m-%d') AS date, COUNT(*) AS count FROM comment WHERE user_id=? AND deleted=0 GROUP BY date)
+          UNION ALL
+          (SELECT DATE_FORMAT(created_at, '%Y-%m-%d') AS date, COUNT(*) AS count FROM reply WHERE user_id=? AND deleted=0 GROUP BY date)
+        ) AS combined
+        WHERE date >= DATE_SUB(CURDATE(), INTERVAL 1 YEAR)
+        GROUP BY date
+        ORDER BY date`;
+
+      const [rows] = await pool.execute(sql, [user_id, user_id, user_id, user_id]);
+
+      console.log(`获取热力数据成功，用户ID：${user_id}`, dayjs().format('YYYY-MM-DD HH:mm:ss'));
+      res.json(Result.success('获取成功', { heat_data: rows }));
+    } catch (err) {
+      console.error('热力数据查询失败:', err, dayjs().format('YYYY-MM-DD HH:mm:ss'));
+      res.status(500).json(Result.error('查询失败'));
+    }
+  })
+  .post('/replyuser', jwtAuth, async (req, res) => {
+    const { comment_id } = req.body;
+    const sql = 'SELECT user_id, user_name FROM reply INNER JOIN cmment ON reply.comment_id = comment.comment_id INNER JOIN user ON comment.user_id = user.user_id WHERE reply.comment_id = ? AND reply.deleted=0 AND comment.deleted=0 AND user.deleted=0';
+    const [rows] = await pool.execute(sql, [comment_id]);
+    if (rows.length > 0) {
+      console.log(`获取用户成功，共${rows.length}条记录`, dayjs().format('YYYY-MM-DD HH:mm:ss'));
+      res.json(Result.success('获取用户成功', rows));
+    } else {
+      res.json(Result.error('用户不存在'));
+    }
+  })
+
 export default router;

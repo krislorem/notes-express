@@ -28,16 +28,27 @@ express()
       return !!exists;
     }
   })
-  .unless({
-    path: [
-      /^\/api\/user\/login($|\/)/,
-      /^\/api\/user\/sendcode($|\/)/,
-      /^\/api\/user\/register($|\/)/,
-      /^\/api\/user\/name($|\/)/,
-      /^\/api\/user\/list($|\/)/
-    ]
-  })
-)
+    .unless({
+      path: [
+        /^\/api\/user\/login($|\/)/,
+        /^\/api\/user\/sendcode($|\/)/,
+        /^\/api\/user\/register($|\/)/,
+        /^\/api\/user\/name($|\/)/,
+        /^\/api\/user\/list($|\/)/,
+        /^\/api\/book($|\/)/,
+        /^\/api\/book\/search($|\/)/,
+        /^\/api\/note\/search($|\/)/,
+        /^\/api\/book\/user($|\/)/,
+        /^\/api\/book\/like($|\/)/,
+        /^\/api\/book\/mark($|\/)/,
+        /^\/api\/book\/note\/like($|\/)/,
+        /^\/api\/book\/note\/mark($|\/)/,
+        /^\/api\/book\/comment\/like($|\/)/,
+        /^\/api\/book\/comment\/reply\/count($|\/)/,
+        /^\/api\/book\/reply\/like($|\/)/,
+      ]
+    })
+  )
   .use(express.json())
   .use(express.urlencoded({ extended: true }))
   .use('/api/oss/', ossRoute)

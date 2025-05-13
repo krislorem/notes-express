@@ -56,7 +56,6 @@ create table reply (
 	reply_id int primary key AUTO_INCREMENT,
 	content varchar(255) not null,
 	comment_id int not null,
-	comment_user_id int not null,
 	comment_user_name varchar(32) not null,
 	user_id int not null,
 	avatar varchar(255) not null,
@@ -96,15 +95,5 @@ create table follow (
 	follower_id int not null,
 	create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
 	update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  deleted TINYINT DEFAULT 0
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- log 
-create table log (
-	log_id int primary key AUTO_INCREMENT,
-	user_id int not null,
-  info varchar(255) not null,
-	create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
-  update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   deleted TINYINT DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

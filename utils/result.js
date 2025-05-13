@@ -9,6 +9,6 @@ export class Result {
     return new Result(0, message, data);
   }
   static error(message) {
-    return new Result(1, message);
+    return new Result(1, message, {});
   }
 }
