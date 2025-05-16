@@ -91,6 +91,29 @@ const router = express.Router()
       res.json(Result.error('用户列表为空'));
     }
   })
+  .post('/info', jwtAuth, async (req, res) => {
+    const { user_id } = req.body;
+    const sql = 'SELECT user_id,user_name,nick_name,email,avatar,info FROM user WHERE user_id =? and deleted=0';
+    const [rows] = await pool.execute(sql, [user_id]);
+    if (rows.length === 0) {
+      return res.status(401).json(Result.error('用户不存在'));
+    } else {
+      const user = rows[0];
+      console.log(`获取用户信息成功，用户ID：${user.user_id}`, dayjs().format('YYYY-MM-DD HH:mm:ss'));
+      res.json(Result.success('获取用户信息成功', user));
+    }
+  })
+  .post('/update', jwtAuth, async (req, res) => {
+    const { user_id, user_name, nick_name, info, avatar } = req.body;
+    const sql = 'UPDATE user SET user_name =?, nick_name =?, info =?, avatar =? WHERE user_id =?';
+    const [result] = await pool.execute(sql, [user_name, nick_name, info, avatar, user_id]);
+    if (result.affectedRows > 0) {
+      console.log(`更新用户信息成功，用户ID：${user_id}`, dayjs().format('YYYY-MM-DD HH:mm:ss'));
+      res.json(Result.success('更新用户信息成功'));
+    } else {
+      res.json(Result.error('更新用户信息失败'));
+    }
+  })
   .post('/name', async (req, res) => {
     const { user_name } = req.body;
     const sql = 'SELECT user_id,user_name,nick_name,avatar,info FROM user WHERE user_name =? and deleted=0';
@@ -154,11 +177,11 @@ const router = express.Router()
   .post('/followed', jwtAuth, async (req, res) => {
     const { user_id, pageNum, pageSize } = req.body;
     const offset = (pageNum - 1) * pageSize;
-    const sql = 'SELECT user_id,user_name,nick_name,avatar,info FROM user WHERE user_id IN (SELECT user_id FROM follow WHERE follower_id =? and deleted=0) LIMIT?,?';
+    const sql = 'SELECT user_id,user_name,nick_name,avatar,info, COUNT(*) OVER() AS total FROM user WHERE user_id IN (SELECT user_id FROM follow WHERE follower_id =? and deleted=0) LIMIT?,?';
     const [rows] = await pool.execute(sql, [user_id, offset.toString(), pageSize.toString()]);
     if (rows.length > 0) {
       console.log(`获取关注列表成功，共${rows.length}条记录`, dayjs().format('YYYY-MM-DD HH:mm:ss'));
-      res.json(Result.success('获取关注列表成功', rows));
+      res.json(Result.success('获取关注列表成功', { data: rows, total: rows[0]?.total || 0 }));
     } else {
       res.json(Result.error('关注列表为空'));
     }
@@ -166,11 +189,11 @@ const router = express.Router()
   .post('/follower', jwtAuth, async (req, res) => {
     const { user_id, pageNum, pageSize } = req.body;
     const offset = (pageNum - 1) * pageSize;
-    const sql = 'SELECT user_id,user_name,nick_name,avatar,info FROM user WHERE user_id IN (SELECT follower_id FROM follow WHERE user_id =? and deleted=0) LIMIT?,?';
+    const sql = 'SELECT user_id,user_name,nick_name,avatar,info, COUNT(*) OVER() AS total FROM user WHERE user_id IN (SELECT follower_id FROM follow WHERE user_id =? and deleted=0) LIMIT?,?';
     const [rows] = await pool.execute(sql, [user_id, offset.toString(), pageSize.toString()]);
     if (rows.length > 0) {
       console.log(`获取粉丝列表成功，共${rows.length}条记录`, dayjs().format('YYYY-MM-DD HH:mm:ss'));
-      res.json(Result.success('获取粉丝列表成功', rows));
+      res.json(Result.success('获取粉丝列表成功', { data: rows, total: rows[0]?.total || 0 }));
     } else {
       res.json(Result.error('粉丝列表为空'));
     }
@@ -178,11 +201,11 @@ const router = express.Router()
   .post('/favoriteNotebooks', jwtAuth, async (req, res) => {
     const { user_id, pageNum, pageSize } = req.body;
     const offset = (pageNum - 1) * pageSize;
-    const sql = 'SELECT book.*, user.user_name, user.avatar FROM book INNER JOIN user ON book.user_id = user.user_id FROM mark WHERE user_id =? and deleted=0 and type=0 and book.deleted=0 and book.is_public=1 ORDER BY mark.create_time DESC LIMIT?,?';
+    const sql = `SELECT book.*, user.user_name, user.avatar, COUNT(*) OVER() AS total FROM book INNER JOIN user ON book.user_id = user.user_id INNER JOIN mark ON book.book_id = mark.object_id WHERE mark.user_id =? AND mark.deleted=0 AND mark.type=0 AND book.deleted=0 AND book.is_public=1 ORDER BY mark.create_time DESC LIMIT ?, ?`;
     const [rows] = await pool.execute(sql, [user_id, offset.toString(), pageSize.toString()]);
     if (rows.length > 0) {
       console.log(`获取收藏笔记本列表成功，共${rows.length}条记录`, dayjs().format('YYYY-MM-DD HH:mm:ss'));
-      res.json(Result.success('获取收藏笔记本列表成功', rows));
+      res.json(Result.success('获取收藏笔记本列表成功', { data: rows, total: rows[0]?.total || 0 }));
     } else {
       res.json(Result.error('收藏笔记本列表为空'));
     }
@@ -190,11 +213,11 @@ const router = express.Router()
   .post('/favoriteNotes', jwtAuth, async (req, res) => {
     const { user_id, pageNum, pageSize } = req.body;
     const offset = (pageNum - 1) * pageSize;
-    const sql = 'SELECT note.*, user.user_name, user.avatar FROM note INNER JOIN user ON note.user_id = user.user_id FROM mark WHERE user_id =? and deleted=0 and type=1 and book.is_public=1 and book.deleted=0 ORDER BY mark.create_time DESC LIMIT ?, ?';
+    const sql = 'SELECT note.*, user.user_name, user.avatar, COUNT(*) OVER() AS total FROM note INNER JOIN user ON note.user_id = user.user_id INNER JOIN mark ON note.note_id = mark.object_id WHERE mark.user_id =? AND mark.deleted=0 AND mark.type=1 AND note.deleted=0 ORDER BY mark.create_time DESC LIMIT?,?';
     const [rows] = await pool.execute(sql, [user_id, offset.toString(), pageSize.toString()]);
     if (rows.length > 0) {
       console.log(`获取收藏笔记列表成功，共${rows.length}条记录`, dayjs().format('YYYY-MM-DD HH:mm:ss'));
-      res.json(Result.success('获取收藏笔记列表成功', rows));
+      res.json(Result.success('获取收藏笔记列表成功', { data: rows, total: rows[0]?.total || 0 }));
     } else {
       res.json(Result.error('收藏笔记列表为空'));
     }
@@ -208,20 +231,20 @@ const router = express.Router()
           SUM(count) AS count,
           CASE
             WHEN SUM(count) = 0 THEN 0
-            WHEN SUM(count) BETWEEN 1 AND 10 THEN 1
-            WHEN SUM(count) BETWEEN 11 AND 20 THEN 2
-            WHEN SUM(count) BETWEEN 21 AND 30 THEN 3
-            WHEN SUM(count) BETWEEN 31 AND 40 THEN 4
+            WHEN SUM(count) BETWEEN 1 AND 2 THEN 1
+            WHEN SUM(count) BETWEEN 3 AND 5 THEN 2
+            WHEN SUM(count) BETWEEN 6 AND 9 THEN 3
+            WHEN SUM(count) BETWEEN 10 AND 14 THEN 4
             ELSE 5
           END AS level
         FROM (
-          (SELECT DATE_FORMAT(created_at, '%Y-%m-%d') AS date, COUNT(*) AS count FROM book WHERE user_id=? AND deleted=0 GROUP BY date)
+          (SELECT DATE_FORMAT(create_time, '%Y-%m-%d') AS date, COUNT(*) AS count FROM book WHERE user_id=? AND deleted=0 GROUP BY date)
           UNION ALL
-          (SELECT DATE_FORMAT(created_at, '%Y-%m-%d') AS date, COUNT(*) AS count FROM note WHERE user_id=? AND deleted=0 GROUP BY date)
+          (SELECT DATE_FORMAT(create_time, '%Y-%m-%d') AS date, COUNT(*) AS count FROM note WHERE user_id=? AND deleted=0 GROUP BY date)
           UNION ALL
-          (SELECT DATE_FORMAT(created_at, '%Y-%m-%d') AS date, COUNT(*) AS count FROM comment WHERE user_id=? AND deleted=0 GROUP BY date)
+          (SELECT DATE_FORMAT(create_time, '%Y-%m-%d') AS date, COUNT(*) AS count FROM comment WHERE user_id=? AND deleted=0 GROUP BY date)
           UNION ALL
-          (SELECT DATE_FORMAT(created_at, '%Y-%m-%d') AS date, COUNT(*) AS count FROM reply WHERE user_id=? AND deleted=0 GROUP BY date)
+          (SELECT DATE_FORMAT(create_time, '%Y-%m-%d') AS date, COUNT(*) AS count FROM reply WHERE user_id=? AND deleted=0 GROUP BY date)
         ) AS combined
         WHERE date >= DATE_SUB(CURDATE(), INTERVAL 1 YEAR)
         GROUP BY date
@@ -237,14 +260,74 @@ const router = express.Router()
     }
   })
   .post('/replyuser', jwtAuth, async (req, res) => {
-    const { comment_id } = req.body;
-    const sql = 'SELECT user_id, user_name FROM reply INNER JOIN cmment ON reply.comment_id = comment.comment_id INNER JOIN user ON comment.user_id = user.user_id WHERE reply.comment_id = ? AND reply.deleted=0 AND comment.deleted=0 AND user.deleted=0';
-    const [rows] = await pool.execute(sql, [comment_id]);
+    try {
+      const { reply_id } = req.body;
+
+      const sql = `
+        SELECT 
+          u.user_id,
+          u.user_name 
+        FROM reply r
+        INNER JOIN user u ON r.user_id = u.user_id
+        WHERE r.object_id = ?
+        AND r.type = 1
+        AND r.deleted = 0
+        `;
+
+      const [rows] = await pool.execute(sql, [reply_id]);
+
+      if (rows.length > 0) {
+        console.log(`获取关联用户成功，共${rows.length}条记录`, dayjs().format('YYYY-MM-DD HH:mm:ss'));
+        res.json(Result.success('查询成功', rows));
+      } else {
+        res.json(Result.error('未找到关联用户'));
+      }
+    } catch (err) {
+      console.error('查询失败:', err, dayjs().format('YYYY-MM-DD HH:mm:ss'));
+      res.status(500).json(Result.error('查询失败'));
+    }
+  })
+  .post('/notebookNum', jwtAuth, async (req, res) => {
+    const { user_id } = req.body;
+    const sql = 'SELECT COUNT(*) AS total FROM book WHERE user_id =? AND deleted=0';
+    const [rows] = await pool.execute(sql, [user_id]);
     if (rows.length > 0) {
-      console.log(`获取用户成功，共${rows.length}条记录`, dayjs().format('YYYY-MM-DD HH:mm:ss'));
-      res.json(Result.success('获取用户成功', rows));
+      console.log(`获取笔记本数量成功，用户ID：${user_id}`, dayjs().format('YYYY-MM-DD HH:mm:ss'));
+      res.json(Result.success('获取成功', { notebookNum: rows[0].total }));
     } else {
-      res.json(Result.error('用户不存在'));
+      res.json(Result.error('获取失败'));
+    }
+  })
+  .post('/noteNum', jwtAuth, async (req, res) => {
+    const { user_id } = req.body;
+    const sql = 'SELECT COUNT(*) AS total FROM note WHERE user_id =? AND deleted=0';
+    const [rows] = await pool.execute(sql, [user_id]);
+    if (rows.length > 0) {
+      console.log(`获取笔记数量成功，用户ID：${user_id}`, dayjs().format('YYYY-MM-DD HH:mm:ss'));
+      res.json(Result.success('获取成功', { noteNum: rows[0].total }));
+    } else {
+      res.json(Result.error('获取失败'));
+    }
+  })
+  .post('/likeNum', jwtAuth, async (req, res) => {
+    const { user_id } = req.body;
+    const sql = `SELECT COUNT(*) AS total FROM (
+      SELECT l.like_id 
+      FROM \`like\` l
+      JOIN book b ON l.object_id = b.book_id AND l.type = 0
+      WHERE b.user_id = ? AND l.deleted = 0
+      UNION ALL
+      SELECT l.like_id 
+      FROM \`like\` l
+      JOIN note n ON l.object_id = n.note_id AND l.type = 1
+      WHERE n.user_id = ? AND l.deleted = 0
+    ) AS combined`;
+    const [rows] = await pool.execute(sql, [user_id, user_id]);
+    if (rows.length > 0) {
+      console.log(`获取点赞数量成功，用户ID：${user_id}`, dayjs().format('YYYY-MM-DD HH:mm:ss'));
+      res.json(Result.success('获取成功', { likeNum: rows[0].total }));
+    } else {
+      res.json(Result.error('获取失败'));
     }
   })
 

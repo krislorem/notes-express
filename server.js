@@ -11,7 +11,7 @@ import userRoute from './controller/userRoute.js'
 import bookRoute from './controller/bookRoute.js'
 express()
   .use(cors({
-    origin: ['http://localhost', 'http://localhost:5173', process.env.CLIENT_URL],
+    origin: ['http://localhost', 'http://localhost:5173', process.env.CLIENT_URL, `${process.env.CLIENT_URL}:5173`],
     credentials: true,
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With'],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
