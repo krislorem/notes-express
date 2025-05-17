@@ -49,12 +49,19 @@ const router = express.Router()
   .post('/register', async (req, res) => {
     const { user_name, email, code, password } = req.body;
     const exists = await client.exists(`code:${email}`);
-    if (!exists) return res.status(400).json(Result.error('验证码已过期'));
+    if (!exists) {
+      console.log(`验证码已过期`, dayjs().format('YYYY-MM-DD HH:mm:ss'));
+      return res.status(400).json(Result.error('验证码已过期'));
+    }
     const storedCode = await client.get(`code:${email}`);
-    if (code !== storedCode) return res.status(400).json(Result.error('验证码错误'));
+    if (code !== storedCode) {
+      console.log(`验证码错误`, dayjs().format('YYYY-MM-DD HH:mm:ss'));
+      return res.status(400).json(Result.error('验证码错误'));
+    }
     const sql = 'SELECT * FROM user WHERE user_name =? AND email =?';
     const [rows] = await pool.execute(sql, [user_name, email]);
     if (rows.length > 0) {
+      console.log(`用户名或邮箱已注册`, dayjs().format('YYYY-MM-DD HH:mm:ss'));
       return res.status(400).json(Result.error('用户名或邮箱已注册'));
     } else {
       const hashedPassword = await bcrypt.hash(password, 10);
@@ -63,6 +70,9 @@ const router = express.Router()
       if (result.affectedRows > 0) {
         console.log(`注册成功，用户ID：${result.insertId}`, dayjs().format('YYYY-MM-DD HH:mm:ss'));
         res.json(Result.success('注册成功', { user_id: result.insertId }));
+      } else {
+        console.log(`注册失败`, dayjs().format('YYYY-MM-DD HH:mm:ss'));
+        res.json(Result.error('注册失败'));
       }
     }
   })

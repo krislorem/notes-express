@@ -147,11 +147,13 @@ const router = express.Router()
   })
   .post('/my/book', jwtAuth, async (req, res) => {
     const { book_id } = req.body;
-    const sql = `SELECT book.*, user.user_name, user.avatar 
+    const sql = `SELECT book.*, user.user_name, user.avatar,
     (SELECT COUNT(*) FROM \`like\` WHERE type=0 AND object_id=book.book_id AND deleted=0) AS like_count,
     (SELECT COUNT(*) FROM mark WHERE type=0 AND object_id=book.book_id AND deleted=0) AS mark_count,
-    (SELECT COUNT(*) FROM comment WHERE type=0 AND object_id=book.book_id AND deleted=0) AS comment_count,
-    FROM book INNER JOIN user ON book.user_id = user.user_id WHERE book.deleted = 0 AND book.book_id =?`;
+    (SELECT COUNT(*) FROM comment WHERE type=0 AND object_id=book.book_id AND deleted=0) AS comment_count
+    FROM book 
+    INNER JOIN user ON book.user_id = user.user_id 
+    WHERE book.deleted = 0 AND book.book_id =?`;
     const [rows] = await pool.execute(sql, [book_id]);
     if (rows.length > 0) {
       console.log(`获取我的书籍成功`, dayjs().format('YYYY-MM-DD HH:mm:ss'));
@@ -195,7 +197,7 @@ const router = express.Router()
     (SELECT COUNT(*) FROM \`like\` WHERE type=2 AND object_id=comment.comment_id AND deleted=0) AS like_count,
     IFNULL((SELECT 1 FROM \`like\` WHERE type=2 AND object_id=comment.comment_id AND user_id = ? AND deleted=0 LIMIT 1), 0) AS is_liked,
     COUNT(*) OVER() AS total FROM comment INNER JOIN user ON comment.user_id = user.user_id WHERE comment.deleted = 0 AND comment.type = 0 AND comment.object_id =? ORDER BY comment.create_time DESC LIMIT?,?`;
-    const [rows] = await pool.execute(sql, [book_id, user_id, offset.toString(), pageSize.toString()]);
+    const [rows] = await pool.execute(sql, [user_id, book_id, offset.toString(), pageSize.toString()]);
     if (rows.length > 0) {
       console.log(`获取评论成功，共${rows.length}条记录`, dayjs().format('YYYY-MM-DD HH:mm:ss'));
       res.json(Result.success('获取评论成功', { data: rows, total: rows[0]?.total || 0 }));
@@ -207,10 +209,9 @@ const router = express.Router()
     const { note_id, user_id, pageNum, pageSize } = req.body;
     const offset = (pageNum - 1) * pageSize;
     const sql = `SELECT comment.*, user.user_name, user.avatar,
-    (SELECT COUNT(*) FROM \`like\` WHERE type=2 AND object_id=comment.comment_id AND deleted=0) AS like_count,
     IFNULL((SELECT 1 FROM \`like\` WHERE type=2 AND object_id=comment.comment_id AND user_id = ? AND deleted=0 LIMIT 1), 0) AS is_liked,
     COUNT(*) OVER() AS total FROM comment INNER JOIN user ON comment.user_id = user.user_id WHERE comment.deleted = 0 AND comment.type = 1 AND comment.object_id =? ORDER BY comment.create_time DESC LIMIT?,?`;
-    const [rows] = await pool.execute(sql, [note_id, user_id, offset.toString(), pageSize.toString()]);
+    const [rows] = await pool.execute(sql, [user_id, note_id, offset.toString(), pageSize.toString()]);
     if (rows.length > 0) {
       console.log(`获取笔记评论成功，共${rows.length}条记录`, dayjs().format('YYYY-MM-DD HH:mm:ss'));
       res.json(Result.success('获取笔记评论成功', { data: rows, total: rows[0]?.total || 0 }));
